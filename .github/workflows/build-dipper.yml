@@ -1,0 +1,115 @@
+name: Build dipper kernel
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - lineage-23.0
+    paths:
+      - 'arch/arm64/configs/vendor/xiaomi/**'
+      - '.github/workflows/build-dipper.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          ref: lineage-23.0
+          fetch-depth: 1
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            bc \
+            bison \
+            build-essential \
+            cpio \
+            flex \
+            gcc-aarch64-linux-gnu \
+            binutils-aarch64-linux-gnu \
+            libelf-dev \
+            libncurses5-dev \
+            libssl-dev \
+            clang \
+            lld \
+            llvm
+
+      - name: Show toolchain
+        run: |
+          clang --version
+          ld.lld --version
+          aarch64-linux-gnu-gcc --version
+          make --version
+
+      - name: Generate dipper config
+        shell: bash
+        run: |
+          set -e
+
+          rm -rf out
+          mkdir -p out
+
+          ./scripts/kconfig/merge_config.sh \
+            -O out \
+            arch/arm64/configs/vendor/xiaomi/mi845_defconfig \
+            arch/arm64/configs/vendor/xiaomi/dipper.config
+
+          make O=out ARCH=arm64 olddefconfig
+
+          echo "===== Important config ====="
+          grep -E \
+            '^(CONFIG_LOCALVERSION|CONFIG_ARCH_QCOM|CONFIG_ARCH_SDM845|CONFIG_MACH_XIAOMI_E1N|CONFIG_SCHED_WALT|CONFIG_BPF_SYSCALL|CONFIG_BPF_JIT|CONFIG_CGROUP_BPF|CONFIG_QCA_CLD_WLAN|CONFIG_ANDROID_BINDER_IPC)=' \
+            out/.config || true
+
+          echo "===== Dipper config check ====="
+          grep -q '^CONFIG_MACH_XIAOMI_E1N=y$' out/.config
+          grep -q '^CONFIG_ARCH_SDM845=y$' out/.config
+          grep -q '^CONFIG_QCA_CLD_WLAN=y$' out/.config
+          echo "dipper config checks passed"
+
+      - name: Save normalized defconfig
+        run: |
+          make O=out ARCH=arm64 savedefconfig
+          cp out/defconfig out/dipper_defconfig
+
+      - name: Build Image.gz-dtb
+        env:
+          ARCH: arm64
+          CROSS_COMPILE: aarch64-linux-gnu-
+        run: |
+          set -e
+          make -j$(nproc) \
+            O=out \
+            ARCH=arm64 \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CC=clang \
+            LD=ld.lld \
+            LLVM=1 \
+            LLVM_IAS=0 \
+            Image.gz-dtb
+
+      - name: Verify build output
+        run: |
+          set -e
+          ls -lh out/arch/arm64/boot/Image*
+          test -s out/arch/arm64/boot/Image.gz-dtb
+          file out/arch/arm64/boot/Image.gz-dtb
+          echo "Kernel build completed successfully."
+
+      - name: Upload kernel artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dipper-kernel-4.9.337
+          if-no-files-found: error
+          path: |
+            out/arch/arm64/boot/Image.gz-dtb
+            out/arch/arm64/boot/Image.gz
+            out/dipper_defconfig
+            out/.config
