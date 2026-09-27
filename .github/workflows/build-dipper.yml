@@ -71,11 +71,14 @@ jobs:
           rm -rf out
           mkdir -p out
 
-          echo "===== Generate base mi845 config ====="
-          make O=out ARCH=arm64 mi845_defconfig
+          echo "===== Copy base mi845 config ====="
+          cp arch/arm64/configs/vendor/xiaomi/mi845_defconfig out/.config
 
-          echo "===== Apply dipper-specific config ====="
-          cat arch/arm64/configs/vendor/xiaomi/dipper.config >> out/.config
+          echo "===== Merge dipper config fragment ====="
+          ./scripts/kconfig/merge_config.sh \
+            -O out \
+            out/.config \
+            arch/arm64/configs/vendor/xiaomi/dipper.config
 
           echo "===== Normalize config ====="
           make O=out ARCH=arm64 olddefconfig
