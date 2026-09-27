@@ -48,6 +48,21 @@ jobs:
           aarch64-linux-gnu-gcc --version
           make --version
 
+      - name: Check Kconfig symbols
+        run: |
+          echo "===== Checking requested symbols in source ====="
+          for sym in \
+            SCHED_WALT \
+            RCU_FAST_NO_HZ \
+            LOG_CPU_MAX_BUF_SHIFT \
+            CGROUP_SCHEDTUNE \
+            SCHED_CORE_CTL \
+            SCHED_CORE_ROTATE
+          do
+            echo "--- CONFIG_$sym ---"
+            grep -R "config $sym" -n kernel arch 2>/dev/null || true
+          done
+
       - name: Generate dipper config
         shell: bash
         run: |
@@ -56,11 +71,13 @@ jobs:
           rm -rf out
           mkdir -p out
 
-          ./scripts/kconfig/merge_config.sh \
-            -O out \
-            arch/arm64/configs/vendor/xiaomi/mi845_defconfig \
-            arch/arm64/configs/vendor/xiaomi/dipper.config
+          echo "===== Generate base mi845 config ====="
+          make O=out ARCH=arm64 mi845_defconfig
 
+          echo "===== Apply dipper-specific config ====="
+          cat arch/arm64/configs/vendor/xiaomi/dipper.config >> out/.config
+
+          echo "===== Normalize config ====="
           make O=out ARCH=arm64 olddefconfig
 
           echo "===== Important config ====="
