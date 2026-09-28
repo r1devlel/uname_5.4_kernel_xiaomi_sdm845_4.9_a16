@@ -8,6 +8,8 @@ on:
     paths:
       - 'arch/arm64/configs/vendor/xiaomi/**'
       - '.github/workflows/build-dipper.yml'
+      - 'Makefile'
+      - 'arch/arm64/boot/dts/**'
 
 permissions:
   contents: read
@@ -15,6 +17,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-22.04
+    timeout-minutes: 45
 
     steps:
       - name: Checkout source
@@ -23,23 +26,26 @@ jobs:
           ref: lineage-23.0
           fetch-depth: 1
 
+      - name: Verify kernel source
+        shell: bash
+        run: |
+          set -e
+          echo "===== Kernel version ====="
+          awk -F' = ' '/^(VERSION|PATCHLEVEL|SUBLEVEL) =/ {print}' Makefile
+
+          test -f arch/arm64/configs/vendor/xiaomi/mi845_defconfig
+          test -f arch/arm64/configs/vendor/xiaomi/dipper.config
+          test -f arch/arm64/configs/sdm845_defconfig
+          test -f scripts/kconfig/merge_config.sh
+
+          echo
+          echo "===== Required Xiaomi config files ====="
+          ls -lh             arch/arm64/configs/vendor/xiaomi/mi845_defconfig             arch/arm64/configs/vendor/xiaomi/dipper.config
+
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            bc \
-            bison \
-            build-essential \
-            cpio \
-            flex \
-            gcc-aarch64-linux-gnu \
-            binutils-aarch64-linux-gnu \
-            libelf-dev \
-            libncurses5-dev \
-            libssl-dev \
-            clang \
-            lld \
-            llvm
+          sudo apt-get install -y             bc             bison             build-essential             cpio             flex             gcc-aarch64-linux-gnu             binutils-aarch64-linux-gnu             libelf-dev             libncurses5-dev             libssl-dev             clang             lld             llvm
 
       - name: Show toolchain
         run: |
@@ -49,15 +55,11 @@ jobs:
           make --version
 
       - name: Check Kconfig symbols
+        shell: bash
         run: |
+          set -e
           echo "===== Checking requested symbols in source ====="
-          for sym in \
-            SCHED_WALT \
-            RCU_FAST_NO_HZ \
-            LOG_CPU_MAX_BUF_SHIFT \
-            CGROUP_SCHEDTUNE \
-            SCHED_CORE_CTL \
-            SCHED_CORE_ROTATE
+          for sym in             SCHED_WALT             RCU_FAST_NO_HZ             LOG_CPU_MAX_BUF_SHIFT             CGROUP_SCHEDTUNE             SCHED_CORE_CTL             SCHED_CORE_ROTATE
           do
             echo "--- CONFIG_$sym ---"
             grep -R "config $sym" -n kernel arch 2>/dev/null || true
@@ -71,56 +73,55 @@ jobs:
           rm -rf out
           mkdir -p out
 
-          echo "===== Copy base mi845 config ====="
+          echo "===== Copy base MI845 config ====="
           cp arch/arm64/configs/vendor/xiaomi/mi845_defconfig out/.config
 
           echo "===== Merge dipper config fragment ====="
-          ./scripts/kconfig/merge_config.sh \
-            -O out \
-            out/.config \
-            arch/arm64/configs/vendor/xiaomi/dipper.config
+          ./scripts/kconfig/merge_config.sh             -O out             out/.config             arch/arm64/configs/vendor/xiaomi/dipper.config
 
           echo "===== Normalize config ====="
           make O=out ARCH=arm64 olddefconfig
 
-          echo "===== Important config ====="
-          grep -E \
-            '^(CONFIG_LOCALVERSION|CONFIG_ARCH_QCOM|CONFIG_ARCH_SDM845|CONFIG_MACH_XIAOMI_E1N|CONFIG_SCHED_WALT|CONFIG_BPF_SYSCALL|CONFIG_BPF_JIT|CONFIG_CGROUP_BPF|CONFIG_QCA_CLD_WLAN|CONFIG_ANDROID_BINDER_IPC)=' \
-            out/.config || true
+          echo "===== Kernel config summary ====="
+          grep -E             '^(CONFIG_LOCALVERSION|CONFIG_ARCH_QCOM|CONFIG_ARCH_SDM845|CONFIG_MACH_XIAOMI_E1N|CONFIG_SCHED_WALT|CONFIG_BPF_SYSCALL|CONFIG_BPF_JIT|CONFIG_CGROUP_BPF|CONFIG_QCA_CLD_WLAN|CONFIG_ANDROID_BINDER_IPC|CONFIG_BUILD_ARM64_APPENDED_DTB_IMAGE)='             out/.config || true
 
-          echo "===== Dipper config check ====="
+          echo "===== Dipper config checks ====="
           grep -q '^CONFIG_MACH_XIAOMI_E1N=y$' out/.config
           grep -q '^CONFIG_ARCH_SDM845=y$' out/.config
           grep -q '^CONFIG_QCA_CLD_WLAN=y$' out/.config
+          grep -q '^CONFIG_BUILD_ARM64_APPENDED_DTB_IMAGE=y$' out/.config
           echo "dipper config checks passed"
 
       - name: Save normalized defconfig
         run: |
+          set -e
           make O=out ARCH=arm64 savedefconfig
           cp out/defconfig out/dipper_defconfig
+          ls -lh out/dipper_defconfig out/.config
 
       - name: Build Image.gz-dtb
-        env:
-          ARCH: arm64
-          CROSS_COMPILE: aarch64-linux-gnu-
+        shell: bash
         run: |
           set -e
-          make -j$(nproc) \
-            O=out \
-            ARCH=arm64 \
-            CROSS_COMPILE=aarch64-linux-gnu- \
-            CC=clang \
-            LD=ld.lld \
-            LLVM=1 \
-            LLVM_IAS=0 \
-            Image.gz-dtb
+
+          make -j$(nproc)             O=out             ARCH=arm64             CROSS_COMPILE=aarch64-linux-gnu-             CC=clang             LD=ld.lld             LLVM=1             LLVM_IAS=0             Image.gz-dtb
 
       - name: Verify build output
+        shell: bash
         run: |
           set -e
-          ls -lh out/arch/arm64/boot/Image*
+
+          echo "===== Kernel artifacts ====="
+          ls -lh out/arch/arm64/boot/Image* 2>/dev/null || true
+
           test -s out/arch/arm64/boot/Image.gz-dtb
           file out/arch/arm64/boot/Image.gz-dtb
+
+          echo "===== Build metadata ====="
+          grep '^CONFIG_LOCALVERSION=' out/.config || true
+          grep '^CONFIG_ARCH_SDM845=' out/.config || true
+          grep '^CONFIG_MACH_XIAOMI_E1N=' out/.config || true
+
           echo "Kernel build completed successfully."
 
       - name: Upload kernel artifacts
