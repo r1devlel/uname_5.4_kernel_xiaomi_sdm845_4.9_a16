@@ -141,7 +141,7 @@ jobs:
             CC=clang \
             LD=ld.lld \
             LLVM=1 \
-            LLVM_IAS=0 \
+            LLVM_IAS=1 \
             Image.gz-dtb
 
       - name: Verify build output
