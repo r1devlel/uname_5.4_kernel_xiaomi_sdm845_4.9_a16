@@ -40,12 +40,27 @@ jobs:
 
           echo
           echo "===== Required Xiaomi config files ====="
-          ls -lh             arch/arm64/configs/vendor/xiaomi/mi845_defconfig             arch/arm64/configs/vendor/xiaomi/dipper.config
+          ls -lh \
+            arch/arm64/configs/vendor/xiaomi/mi845_defconfig \
+            arch/arm64/configs/vendor/xiaomi/dipper.config
 
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y             bc             bison             build-essential             cpio             flex             gcc-aarch64-linux-gnu             binutils-aarch64-linux-gnu             libelf-dev             libncurses5-dev             libssl-dev             clang             lld             llvm
+          sudo apt-get install -y \
+            bc \
+            bison \
+            build-essential \
+            cpio \
+            flex \
+            gcc-aarch64-linux-gnu \
+            binutils-aarch64-linux-gnu \
+            libelf-dev \
+            libncurses5-dev \
+            libssl-dev \
+            clang \
+            lld \
+            llvm
 
       - name: Show toolchain
         run: |
@@ -59,7 +74,13 @@ jobs:
         run: |
           set -e
           echo "===== Checking requested symbols in source ====="
-          for sym in             SCHED_WALT             RCU_FAST_NO_HZ             LOG_CPU_MAX_BUF_SHIFT             CGROUP_SCHEDTUNE             SCHED_CORE_CTL             SCHED_CORE_ROTATE
+          for sym in \
+            SCHED_WALT \
+            RCU_FAST_NO_HZ \
+            LOG_CPU_MAX_BUF_SHIFT \
+            CGROUP_SCHEDTUNE \
+            SCHED_CORE_CTL \
+            SCHED_CORE_ROTATE
           do
             echo "--- CONFIG_$sym ---"
             grep -R "config $sym" -n kernel arch 2>/dev/null || true
@@ -77,13 +98,18 @@ jobs:
           cp arch/arm64/configs/vendor/xiaomi/mi845_defconfig out/.config
 
           echo "===== Merge dipper config fragment ====="
-          ./scripts/kconfig/merge_config.sh             -O out             out/.config             arch/arm64/configs/vendor/xiaomi/dipper.config
+          ARCH=arm64 ./scripts/kconfig/merge_config.sh \
+            -O out \
+            out/.config \
+            arch/arm64/configs/vendor/xiaomi/dipper.config
 
           echo "===== Normalize config ====="
           make O=out ARCH=arm64 olddefconfig
 
           echo "===== Kernel config summary ====="
-          grep -E             '^(CONFIG_LOCALVERSION|CONFIG_ARCH_QCOM|CONFIG_ARCH_SDM845|CONFIG_MACH_XIAOMI_E1N|CONFIG_SCHED_WALT|CONFIG_BPF_SYSCALL|CONFIG_BPF_JIT|CONFIG_CGROUP_BPF|CONFIG_QCA_CLD_WLAN|CONFIG_ANDROID_BINDER_IPC|CONFIG_BUILD_ARM64_APPENDED_DTB_IMAGE)='             out/.config || true
+          grep -E \
+            '^(CONFIG_LOCALVERSION|CONFIG_ARCH_QCOM|CONFIG_ARCH_SDM845|CONFIG_MACH_XIAOMI_E1N|CONFIG_SCHED_WALT|CONFIG_BPF_SYSCALL|CONFIG_BPF_JIT|CONFIG_CGROUP_BPF|CONFIG_QCA_CLD_WLAN|CONFIG_ANDROID_BINDER_IPC|CONFIG_BUILD_ARM64_APPENDED_DTB_IMAGE)=' \
+            out/.config || true
 
           echo "===== Dipper config checks ====="
           grep -q '^CONFIG_MACH_XIAOMI_E1N=y$' out/.config
@@ -104,7 +130,15 @@ jobs:
         run: |
           set -e
 
-          make -j$(nproc)             O=out             ARCH=arm64             CROSS_COMPILE=aarch64-linux-gnu-             CC=clang             LD=ld.lld             LLVM=1             LLVM_IAS=0             Image.gz-dtb
+          make -j$(nproc) \
+            O=out \
+            ARCH=arm64 \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CC=clang \
+            LD=ld.lld \
+            LLVM=1 \
+            LLVM_IAS=0 \
+            Image.gz-dtb
 
       - name: Verify build output
         shell: bash
