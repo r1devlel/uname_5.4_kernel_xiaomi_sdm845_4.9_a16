@@ -55,6 +55,8 @@ jobs:
             flex \
             gcc-aarch64-linux-gnu \
             binutils-aarch64-linux-gnu \
+            gcc-arm-linux-gnueabi \
+            binutils-arm-linux-gnueabi \
             libelf-dev \
             libncurses5-dev \
             libssl-dev \
@@ -67,6 +69,7 @@ jobs:
           clang --version
           ld.lld --version
           aarch64-linux-gnu-gcc --version
+          arm-linux-gnueabi-gcc --version
           make --version
 
       - name: Check Kconfig symbols
@@ -134,6 +137,7 @@ jobs:
             O=out \
             ARCH=arm64 \
             CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             CC=clang \
             LD=ld.lld \
             LLVM=1 \
